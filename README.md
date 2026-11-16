@@ -119,8 +119,6 @@ Semgrep registró en ambas ramas **dos alertas `django-no-csrf-token`** en `Ejer
 
 Junto con `Ejercicio3/src/main/resources/templates/upload.html:39`, son **tres alertas comunes** causadas por aplicar una regla específica de Django a plantillas Thymeleaf. Clasificarlas como falsos positivos **no equivale a afirmar que los formularios estén protegidos contra CSRF**: son dos preguntas diferentes.
 
-
-
 ## 5. Revisión estática con LLM
 
 **Pendiente.** Se revisará el código fuente de ambas ramas con un modelo de lenguaje (LLM), registrando archivos, líneas, razonamiento y límites de cada observación. El LLM no ejecuta la aplicación ni sustituye la validación humana. Sus hallazgos se cotejarán con Semgrep y con la evidencia de los Prácticos 2 y 4.
