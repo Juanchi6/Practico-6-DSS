@@ -71,7 +71,7 @@ La causa comprobable del XSS es `| safe` en la plantilla de la aplicación. La a
 
 La diferencia se verifica siguiendo el archivo desde `POST /upload/{id}` hasta `GET /uploads/{filename}`. Una ausencia de alertas no demuestra que una funcionalidad sea segura: en `main` Semgrep omitió controles faltantes que sí se ven al revisar el flujo completo. Esta comparación se limita a la vulnerabilidad de carga arbitraria; no certifica todas las propiedades de seguridad de `practico-2`.
 
-En ambas ramas aparece una alerta de `django-no-csrf-token` sobre `Ejercicio3/src/main/resources/templates/upload.html`. La plantilla usa **Thymeleaf** en una aplicación **Spring**, por lo que exigir la etiqueta de Django `{% csrf_token %}` es un **falso positivo respecto de esa regla**. La alerta no permite establecer si Spring tiene o no protección CSRF: eso requiere revisar su configuración y el comportamiento de la aplicación.
+La alerta de Semgrep sobre el formulario de carga de archivos se analiza junto con las otras alertas de la misma regla en la sección «Alertas de CSRF — Regla de Django aplicada a Spring».
 
 ### Ejercicio 4 — Inyección de expresiones SpEL
 
@@ -112,16 +112,13 @@ Este cambio **no agrega autenticación a la aplicación**: el usuario de `USER` 
 
 Estas cinco alertas son **la mitad de las diez alertas comunes** a ambas ramas; permanecen porque las correcciones de los ejercicios no cambiaron la configuración de Docker. La [referencia oficial de Docker para `USER`](https://docs.docker.com/reference/dockerfile/#user) especifica que determina el usuario de ejecución de `CMD` y `ENTRYPOINT`.
 
-### Alertas CSRF de los formularios del Ejercicio 5
+### Alertas de CSRF — Regla de Django aplicada a Spring
 
-Semgrep registró en ambas ramas **dos alertas `django-no-csrf-token`** en `Ejercicio5/src/main/resources/templates/index.html:45` y `:56`. Las líneas corresponden a los formularios `POST /login` y `POST /register`.
+CSRF es un ataque que intenta hacer que el navegador de una persona envíe una petición no deseada a una aplicación en la que tiene una sesión activa. Semgrep encontró tres formularios sin la etiqueta `{% csrf_token %}`: uno de carga de archivos en `Ejercicio3/src/main/resources/templates/upload.html:39` y dos de login y registro en `Ejercicio5/src/main/resources/templates/index.html:45` y `:56`.
 
-| Observación | Interpretación |
-| --- | --- |
-| La plantilla declara `xmlns:th="http://www.thymeleaf.org"` y utiliza `th:action`; el proyecto es Spring Boot con Thymeleaf. | La regla busca `{% csrf_token %}`, una etiqueta de **Django**. Estas dos alertas son **falsos positivos respecto de la regla aplicada**: esa etiqueta no corresponde a esta aplicación. |
-| Los formularios no contienen un campo CSRF explícito y en `pom.xml` no aparece `spring-boot-starter-security`; `practico-2` solo agrega `spring-security-crypto` para el hash de contraseñas. | La comparación de plantillas y dependencias **no acredita protección CSRF**. Determinar si existe una vulnerabilidad explotable requiere revisar los filtros de seguridad efectivos y probar las peticiones en ejecución. |
+**Clasificación:** las tres alertas aparecen en ambas ramas y son **falsos positivos de la regla `django-no-csrf-token`**. Esa regla exige una etiqueta propia de **Django**, pero los tres formularios están hechos con **Thymeleaf para Spring**. Por eso, la ausencia de esa etiqueta no demuestra una vulnerabilidad en estas aplicaciones.
 
-Junto con `Ejercicio3/src/main/resources/templates/upload.html:39`, son **tres alertas comunes** causadas por aplicar una regla específica de Django a plantillas Thymeleaf. Clasificarlas como falsos positivos **no equivale a afirmar que los formularios estén protegidos contra CSRF**: son dos preguntas diferentes.
+**Alcance:** esta clasificación se refiere solo a la regla de Django. No se comprobó por separado si los formularios de Spring están protegidos frente a CSRF; sería necesario revisar la protección de la aplicación y probar su comportamiento para concluirlo.
 
 ## 5. Revisión estática con LLM
 
