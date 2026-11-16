@@ -55,8 +55,8 @@ Para clasificar ambos casos se siguió el recorrido de `query` hasta `db.execute
 
 | Rama | Evidencia | Resultado de Semgrep | Clasificación |
 | --- | --- | --- | --- |
-| `main` | `Ejercicio2/app.py` guarda la descripción enviada por el formulario. En `templates/edit.html:86` se muestra con `{{ pelicula['descripcion'] | safe }}`, que desactiva el escape HTML para ese valor. | No señaló esa línea vulnerable. | **Falso negativo:** una descripción con HTML o JavaScript puede interpretarse al volver a mostrarla. |
-| `practico-2` | La misma línea muestra `{{ pelicula['descripcion'] }}`, sin `safe`. | Tampoco señaló la plantilla, como corresponde al cambio. | La causa de este XSS fue corregida. |
+| `main` | `Ejercicio2/app.py` guarda la descripción enviada por el formulario. En `templates/edit.html:86` se muestra con `{{ pelicula['descripcion'] | safe }}`, que desactiva el escape HTML para ese valor. | No detectó el XSS en esa línea. | **Falso negativo:** el XSS existe, pero Semgrep no lo alertó. |
+| `practico-2` | La misma línea muestra `{{ pelicula['descripcion'] }}`, sin `safe`. | No alertó sobre esa línea; aquí la ausencia de alerta es esperable. | La causa de este XSS fue corregida. No hay falso negativo en esa línea. |
 
 En **ambas ramas**, Semgrep sí avisó sobre uso directo de Jinja2 en `Ejercicio2/test_seguridad.py:15`. Esa línea pertenece al **test**, que configura `select_autoescape(["html"])`; la alerta no identifica el XSS de la aplicación. La clasificamos como **falso positivo para el riesgo que sugiere en ese archivo**. El test usa la plantilla real y comprueba el comportamiento vulnerable en `main` y el escapado en `practico-2`.
 
@@ -72,6 +72,17 @@ La causa comprobable del XSS es `| safe` en la plantilla de la aplicación. La a
 La diferencia se verifica siguiendo el archivo desde `POST /upload/{id}` hasta `GET /uploads/{filename}`. Una ausencia de alertas no demuestra que una funcionalidad sea segura: en `main` Semgrep omitió controles faltantes que sí se ven al revisar el flujo completo. Esta comparación se limita a la vulnerabilidad de carga arbitraria; no certifica todas las propiedades de seguridad de `practico-2`.
 
 En ambas ramas aparece una alerta de `django-no-csrf-token` sobre `Ejercicio3/src/main/resources/templates/upload.html`. La plantilla usa **Thymeleaf** en una aplicación **Spring**, por lo que exigir la etiqueta de Django `{% csrf_token %}` es un **falso positivo respecto de esa regla**. La alerta no permite establecer si Spring tiene o no protección CSRF: eso requiere revisar su configuración y el comportamiento de la aplicación.
+
+### Ejercicio 4 — Inyección de expresiones SpEL
+
+| Rama | Recorrido del dato | Resultado de Semgrep | Clasificación |
+| --- | --- | --- | --- |
+| `main` | `FuncionController.search` pasa el parámetro de búsqueda `buscar` a `spelEval.evaluate(buscar)`. En `SpelEvaluator.java`, el método lo procesa con `parseExpression(expression)` y `getValue(standardContext)`. | Señaló `SpelEvaluator.java:14`. | **Verdadero positivo para el flujo de búsqueda:** la entrada del usuario llega al evaluador de expresiones. |
+| `practico-2` | El controlador usa `String spelResultado = buscar` y busca el texto literalmente. `SpelEvaluator` conserva el mismo código, pero este flujo ya no lo llama. | Conservó la misma alerta en `SpelEvaluator.java:14`. | **Alerta que requiere contexto:** el método señalado sigue siendo inseguro si se lo invoca con datos no confiables, pero no demuestra que el buscador corregido sea vulnerable. |
+
+La corrección cambió el **recorrido de la entrada**, no el archivo que Semgrep señala. Por eso se mantiene una alerta en ambas ramas aunque se haya eliminado la evaluación de expresiones desde el buscador. En este flujo, la alerta de `practico-2` es un **falso positivo si se interpreta como vulnerabilidad explotable desde la búsqueda**; el método riesgoso sigue presente y convendría eliminarlo si ya no se usa.
+
+Los tests de integración del repositorio comprueban que `1+1` se trate como texto y que una búsqueda de `Inception` devuelva una respuesta correcta. El informe se apoya aquí en el código y en esos criterios de prueba; la alerta por sí sola no prueba que se pueda alcanzar el evaluador desde la rama corregida.
 
 **Otros hallazgos:** pendientes de validar y documentar.
 
