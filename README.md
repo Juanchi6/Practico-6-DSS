@@ -38,9 +38,20 @@ La identificación y clasificación de las alertas se completará tras revisar e
 
 ## 4. Análisis de los hallazgos
 
-**Pendiente de revisión.** Para cada alerta relevante se indicará la regla, archivo y línea, el comportamiento señalado y si corresponde a un problema real, un falso positivo o un caso que requiere más evidencia. Las alertas repetidas por una misma causa se explicarán juntas sin alterar la cantidad total informada por Semgrep.
+Un **falso positivo** es una alerta que no corresponde a la vulnerabilidad indicada al revisar el contexto. Un **falso negativo** es una vulnerabilidad presente que la herramienta no detectó.
 
-Un **falso positivo** es una detección que no corresponde a la vulnerabilidad afirmada en el contexto del código. Un **falso negativo** es un problema presente y comprobado en el código que el escaneo no señaló. No se clasificarán hallazgos únicamente por el título de la regla.
+### Ejercicio 1 — Inyección SQL
+
+| Rama | Evidencia en `Ejercicio1/app.py` | Resultado de Semgrep | Clasificación |
+| --- | --- | --- | --- |
+| `main` | La búsqueda inserta `query`, recibido del usuario, directamente en `WHERE peliculas.nombre LIKE '%{query}%'`. | No emitió alerta SQL para ese código. | **Falso negativo:** la entrada puede alterar la consulta. |
+| `practico-2` | Usa `WHERE peliculas.nombre LIKE ?` y pasa `(f'%{query}%',)` como parámetro. La columna se elige de un diccionario fijo y la dirección solo admite `ASC` o `DESC`. | Emitió una alerta SQL en la línea 44. | **Falso positivo:** la entrada no se inserta como sintaxis SQL en este flujo. |
+
+La alerta de la rama corregida usa una regla denominada `sqlalchemy-execute-raw-query`, aunque este archivo usa `sqlite3`. La construcción dinámica de `ORDER BY` puede parecer riesgosa al analizar una sola línea, pero sus dos componentes están limitados a valores permitidos.
+
+**Para defenderlo:** Semgrep no detectó el SQL vulnerable de `main` y sí marcó la versión parametrizada. Por eso revisamos cómo llega la entrada del usuario a `db.execute()`, en vez de aceptar la alerta sin contexto.
+
+**Otros hallazgos:** pendientes de validar y documentar.
 
 ## 5. Revisión estática con LLM
 
