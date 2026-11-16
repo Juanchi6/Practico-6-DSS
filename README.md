@@ -1,20 +1,6 @@
 # Práctico 6 — Análisis estático de código
 
-**Materia:** Desarrollo de Software Seguro  
-**Estado:** informe en elaboración. Las conclusiones se incorporarán tras revisar cada hallazgo.  
-**Repositorio analizado:** aplicaciones de los Prácticos 2 y 4, en las ramas `main` y `practico-2`.
-
-## 1. Objetivo y herramienta
-
-El objetivo es analizar el código fuente de las aplicaciones usadas en los Prácticos 2 y 4, comparar la rama original (`main`) con la rama corregida (`practico-2`) y contrastar los resultados de una herramienta tradicional con una revisión del código realizada mediante un LLM.
-
-Se eligió **Semgrep Community Edition (CE), versión 1.185.0**. Semgrep examina el código sin ejecutar las aplicaciones y aplica reglas para detectar patrones y flujos de datos potencialmente inseguros. En este trabajo se utilizó `--config auto`, que obtiene del registro las reglas comunitarias correspondientes al proyecto. Se registran los comandos, la versión, la cantidad de reglas y las salidas de ambos escaneos para poder reproducir la comparación.
-
-La edición Community permite ejecutar reglas comunitarias y propias localmente. Frente a las capacidades comerciales, no incluye reglas Pro ni el análisis avanzado entre archivos y funciones de Semgrep Code. Tampoco incluye las funciones de Semgrep Supply Chain que aparecen como no activadas en el resumen de la CLI. Estas limitaciones ayudan a interpretar las vulnerabilidades que la configuración usada no detecta.
-
-**Fuentes:** [Semgrep Community Edition](https://semgrep.dev/products/community-edition/) · [Comparación entre CE y la plataforma](https://semgrep.dev/products/semgrep-vs-ce/) · [Ejemplo oficial de `--config auto`](https://semgrep.dev/docs/semgrep-ci/sample-ci-configs).
-
-## 2. Procedimiento y resultados de los escaneos
+## 1. Ejecución y resultados de los escaneos
 
 Se ejecutó el mismo comando desde la raíz del repositorio en cada rama. Los archivos JSON se guardaron fuera del árbol del repositorio.
 
@@ -35,6 +21,14 @@ Se ejecutó el mismo comando desde la raíz del repositorio en cada rama. Los ar
 Ambos escaneos finalizaron correctamente y se limitaron a archivos seguidos por Git. En los dos JSON se registró una advertencia de análisis parcial de una plantilla HTML; se tendrá en cuenta al evaluar posibles omisiones. Los términos `ERROR`, `WARNING` y `blocking` son etiquetas de la herramienta, no una confirmación automática de que cada hallazgo sea una vulnerabilidad explotable.
 
 **Identificadores de commit analizados:** pendientes de registrar para fijar exactamente la versión de cada rama.
+
+## 2. Herramienta: funcionamiento y limitaciones
+
+Se usó **Semgrep Community Edition (CE) 1.185.0**. Examina el código sin ejecutar las aplicaciones y aplica reglas para localizar patrones y flujos de datos potencialmente inseguros. Con `--config auto` se cargaron 461 reglas comunitarias adecuadas al proyecto.
+
+La edición Community permite ejecutar reglas locales y comunitarias. Frente a Semgrep Code comercial, no incluye reglas Pro ni análisis avanzado entre archivos y funciones; el escaneo OSS tampoco activó Semgrep Supply Chain. Por eso, una vulnerabilidad puede existir aunque no aparezca una alerta.
+
+**Fuentes:** [Semgrep CE](https://semgrep.dev/products/community-edition/) · [CE y plataforma](https://semgrep.dev/products/semgrep-vs-ce/) · [Uso de `--config auto`](https://semgrep.dev/docs/semgrep-ci/sample-ci-configs).
 
 ## 3. Comparación inicial de las ramas
 
