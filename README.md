@@ -34,7 +34,7 @@ La edición Community permite ejecutar reglas locales y comunitarias. Frente a S
 
 Al comparar regla, archivo y línea en los JSON, **10 alertas aparecen en ambas ramas**. Hay **2 alertas exclusivas de `main`** y **1 exclusiva de `practico-2`**. Estas cifras explican la diferencia neta de 12 a 11; no implican por sí solas que solo haya cambiado una vulnerabilidad.
 
-La identificación y clasificación de las alertas se completará tras revisar el código y el contexto de cada una.
+Las diez alertas comunes se distribuyen así: cinco por Dockerfile sin `USER`, tres de la regla CSRF de Django aplicada a Thymeleaf, una sobre Jinja2 en un test y una sobre el evaluador SpEL que permanece en el código. Las dos alertas exclusivas de `main` corresponden a AES/ECB; la exclusiva de `practico-2`, a SQL. El análisis del código también identificó vulnerabilidades que no figuran entre las alertas.
 
 ## 4. Análisis de los hallazgos
 
@@ -108,7 +108,18 @@ La alerta advierte que no se asigna explícitamente una identidad con menos priv
 
 Estas cinco alertas son **la mitad de las diez alertas comunes** a ambas ramas; permanecen porque las correcciones de los ejercicios no cambiaron la configuración de Docker.
 
-**Otros hallazgos:** pendientes de validar y documentar.
+### Alertas CSRF de los formularios del Ejercicio 5
+
+Semgrep registró en ambas ramas **dos alertas `django-no-csrf-token`** en `Ejercicio5/src/main/resources/templates/index.html:45` y `:56`. Las líneas corresponden a los formularios `POST /login` y `POST /register`.
+
+| Observación | Interpretación |
+| --- | --- |
+| La plantilla declara `xmlns:th="http://www.thymeleaf.org"` y utiliza `th:action`; el proyecto es Spring Boot con Thymeleaf. | La regla busca `{% csrf_token %}`, una etiqueta de **Django**. Estas dos alertas son **falsos positivos respecto de la regla aplicada**: esa etiqueta no corresponde a esta aplicación. |
+| Los formularios no contienen un campo CSRF explícito y en `pom.xml` no aparece `spring-boot-starter-security`; `practico-2` solo agrega `spring-security-crypto` para el hash de contraseñas. | La comparación de plantillas y dependencias **no acredita protección CSRF**. Determinar si existe una vulnerabilidad explotable requiere revisar los filtros de seguridad efectivos y probar las peticiones en ejecución. |
+
+Junto con `Ejercicio3/src/main/resources/templates/upload.html:39`, son **tres alertas comunes** causadas por aplicar una regla específica de Django a plantillas Thymeleaf. Clasificarlas como falsos positivos **no equivale a afirmar que los formularios estén protegidos contra CSRF**: son dos preguntas diferentes.
+
+
 
 ## 5. Revisión estática con LLM
 
