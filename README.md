@@ -51,6 +51,17 @@ La alerta de la rama corregida usa una regla denominada `sqlalchemy-execute-raw-
 
 **Para defenderlo:** Semgrep no detectó el SQL vulnerable de `main` y sí marcó la versión parametrizada. Por eso revisamos cómo llega la entrada del usuario a `db.execute()`, en vez de aceptar la alerta sin contexto.
 
+### Ejercicio 2 — XSS almacenado
+
+| Rama | Evidencia | Resultado de Semgrep | Clasificación |
+| --- | --- | --- | --- |
+| `main` | `Ejercicio2/app.py` guarda la descripción enviada por el formulario. En `templates/edit.html:86` se muestra con `{{ pelicula['descripcion'] | safe }}`, que desactiva el escape HTML para ese valor. | No señaló esa línea vulnerable. | **Falso negativo:** una descripción con HTML o JavaScript puede interpretarse al volver a mostrarla. |
+| `practico-2` | La misma línea muestra `{{ pelicula['descripcion'] }}`, sin `safe`. | Tampoco señaló la plantilla, como corresponde al cambio. | La causa de este XSS fue corregida. |
+
+En **ambas ramas**, Semgrep sí avisó sobre uso directo de Jinja2 en `Ejercicio2/test_seguridad.py:15`. Esa línea pertenece al **test**, que configura `select_autoescape(["html"])`; la alerta no identifica el XSS de la aplicación. La clasificamos como **falso positivo para el riesgo que sugiere en ese archivo**. El test usa la plantilla real y comprueba el comportamiento vulnerable en `main` y el escapado en `practico-2`.
+
+**Para defenderlo:** el problema está en `| safe` dentro de la plantilla, no en que el test utilice Jinja2. La advertencia de análisis parcial del JSON corresponde a `templates/index.html`, no a `edit.html`; no podemos atribuirle automáticamente esta omisión.
+
 **Otros hallazgos:** pendientes de validar y documentar.
 
 ## 5. Revisión estática con LLM
