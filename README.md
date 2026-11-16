@@ -95,6 +95,19 @@ Las dos alertas de `main` corresponden a **dos usos del mismo modo inseguro**, n
 
 Los tests incluidos en `EncryptionServiceTest.java` definen dos condiciones para la corrección: que el valor guardado comience con `$argon2id$` y que dos usos de la misma contraseña produzcan hashes distintos. Esta sección describe lo que comprueban esos tests, sin atribuirles resultados de ejecución nuevos.
 
+### Configuración de Docker — Cinco alertas comunes
+
+Semgrep señaló **un Dockerfile por ejercicio** en `main` y en `practico-2` porque ninguno declara `USER`. Los cinco Dockerfile son iguales entre ramas; los archivos `docker-compose.yml` correspondientes tampoco establecen un usuario mediante `user:`.
+
+| Archivos afectados | Qué indica la alerta | Clasificación |
+| --- | --- | --- |
+| `Ejercicio1/Dockerfile` y `Ejercicio2/Dockerfile` | La imagen final ejecuta Flask sin declarar un usuario en el Dockerfile ni en Compose. | **Alerta válida de configuración**, presente en las dos ramas. |
+| `Ejercicio3/Dockerfile`, `Ejercicio4/Dockerfile` y `Ejercicio5/Dockerfile` | La imagen final ejecuta Java sin declarar un usuario en el Dockerfile ni en Compose. | **Alerta válida de configuración**, presente en las dos ramas. |
+
+La alerta advierte que no se asigna explícitamente una identidad con menos privilegios al proceso de la aplicación. Los archivos analizados justifican la advertencia, pero **no incluyen una comprobación del usuario efectivo dentro del contenedor**, que haría falta para afirmar con certeza qué identidad tiene en ejecución. Corregirlo requeriría crear o seleccionar un usuario sin privilegios para la imagen final y otorgarle acceso a los directorios que las aplicaciones necesiten escribir, como las bases de datos y `/uploads` en el Ejercicio 3.
+
+Estas cinco alertas son **la mitad de las diez alertas comunes** a ambas ramas; permanecen porque las correcciones de los ejercicios no cambiaron la configuración de Docker.
+
 **Otros hallazgos:** pendientes de validar y documentar.
 
 ## 5. Revisión estática con LLM
