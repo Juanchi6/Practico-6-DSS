@@ -49,7 +49,7 @@ Un **falso positivo** es una alerta que no corresponde a la vulnerabilidad indic
 
 La alerta de la rama corregida usa una regla denominada `sqlalchemy-execute-raw-query`, aunque este archivo usa `sqlite3`. La construcción dinámica de `ORDER BY` puede parecer riesgosa al analizar una sola línea, pero sus dos componentes están limitados a valores permitidos.
 
-**Para defenderlo:** Semgrep no detectó el SQL vulnerable de `main` y sí marcó la versión parametrizada. Por eso revisamos cómo llega la entrada del usuario a `db.execute()`, en vez de aceptar la alerta sin contexto.
+Para clasificar ambos casos se siguió el recorrido de `query` hasta `db.execute()`: en `main` forma parte del texto de la consulta, mientras que en `practico-2` llega como parámetro. Por eso, el número de alertas SQL por sí solo no mide la mejora entre ramas.
 
 ### Ejercicio 2 — XSS almacenado
 
@@ -60,7 +60,18 @@ La alerta de la rama corregida usa una regla denominada `sqlalchemy-execute-raw-
 
 En **ambas ramas**, Semgrep sí avisó sobre uso directo de Jinja2 en `Ejercicio2/test_seguridad.py:15`. Esa línea pertenece al **test**, que configura `select_autoescape(["html"])`; la alerta no identifica el XSS de la aplicación. La clasificamos como **falso positivo para el riesgo que sugiere en ese archivo**. El test usa la plantilla real y comprueba el comportamiento vulnerable en `main` y el escapado en `practico-2`.
 
-**Para defenderlo:** el problema está en `| safe` dentro de la plantilla, no en que el test utilice Jinja2. La advertencia de análisis parcial del JSON corresponde a `templates/index.html`, no a `edit.html`; no podemos atribuirle automáticamente esta omisión.
+La causa comprobable del XSS es `| safe` en la plantilla de la aplicación. La advertencia de análisis parcial del JSON corresponde a `templates/index.html`, no a `edit.html`; por tanto, no hay evidencia suficiente para atribuirle esa omisión.
+
+### Ejercicio 3 — Carga de archivos
+
+| Rama | Evidencia en `Ejercicio3/src/main/java/com/cinebuscador/controller/PeliculaController.java` | Resultado de Semgrep | Clasificación |
+| --- | --- | --- | --- |
+| `main` | `uploadFile` toma `getOriginalFilename()` y copia el contenido recibido a `uploadDir` sin validar tamaño, extensión ni formato. `serveFile` lo devuelve en línea con un tipo de contenido inferido del archivo. | No emitió alerta por esta carga de archivos. | **Falso negativo:** el servidor acepta y almacena archivos arbitrarios como afiches. |
+| `practico-2` | Rechaza archivos vacíos y mayores a 1 MiB, permite PNG/JPG/JPEG, verifica que el contenido coincida con el formato y limita dimensiones. Guarda una imagen reconstruida con nombre UUID. Al servirla, valida el nombre y el directorio, fija el tipo de imagen y agrega `nosniff`. | Tampoco emitió alerta por esta funcionalidad. | La causa identificada en `main` fue mitigada en el código. |
+
+La diferencia se verifica siguiendo el archivo desde `POST /upload/{id}` hasta `GET /uploads/{filename}`. Una ausencia de alertas no demuestra que una funcionalidad sea segura: en `main` Semgrep omitió controles faltantes que sí se ven al revisar el flujo completo. Esta comparación se limita a la vulnerabilidad de carga arbitraria; no certifica todas las propiedades de seguridad de `practico-2`.
+
+En ambas ramas aparece una alerta de `django-no-csrf-token` sobre `Ejercicio3/src/main/resources/templates/upload.html`. La plantilla usa **Thymeleaf** en una aplicación **Spring**, por lo que exigir la etiqueta de Django `{% csrf_token %}` es un **falso positivo respecto de esa regla**. La alerta no permite establecer si Spring tiene o no protección CSRF: eso requiere revisar su configuración y el comportamiento de la aplicación.
 
 **Otros hallazgos:** pendientes de validar y documentar.
 
@@ -72,6 +83,6 @@ En **ambas ramas**, Semgrep sí avisó sobre uso directo de Jinja2 en `Ejercicio
 
 **Pendiente.** Se explicará qué detectó cada método, qué omitió, qué alertas requirieron contexto y cómo cambiaron los resultados entre las ramas. La conclusión se redactará a partir de los hallazgos verificados.
 
-## Evidencia para la defensa
+## Evidencias y reproducibilidad
 
-Los dos resúmenes de terminal y los archivos `semgrep-main.json` y `semgrep-practico-2.json` respaldan las cifras. El informe incorporará una tabla breve con los casos importantes para que pueda presentarse y explicarse sin recorrer todos los registros JSON.
+Los resúmenes de terminal y los archivos `semgrep-main.json` y `semgrep-practico-2.json` respaldan las cifras. La clasificación de cada caso se basa en las alertas de esos JSON y en el recorrido concreto de los datos en el código de ambas ramas.
