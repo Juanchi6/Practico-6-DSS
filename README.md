@@ -120,29 +120,60 @@ CSRF es un ataque que intenta hacer que el navegador de una persona envíe una p
 
 **Alcance:** esta clasificación se refiere solo a la regla de Django. No se comprobó por separado si los formularios de Spring están protegidos frente a CSRF; sería necesario revisar la protección de la aplicación y probar su comportamiento para concluirlo.
 
-## 5. Revisión estática con LLM
+## 5. Revisión del código con LLM y comparación por ejercicio
 
-Un **LLM** es un modelo de lenguaje que puede leer y explicar código. Este asistente revisó archivos de ambas ramas y siguió el recorrido de entradas, consultas, plantillas, archivos subidos y contraseñas. Se revisaron `app.py` de los Ejercicios 1 y 2, `edit.html`, los controladores y componentes relevantes de los Ejercicios 3 a 5, además de los Dockerfile y archivos Compose. La revisión se hizo **después de conocer los JSON de Semgrep**; por eso no es un segundo análisis ciego. Tampoco se ejecutaron pruebas nuevas en este paso.
+Un **LLM** es un modelo de lenguaje capaz de examinar y explicar código. Este asistente revisó archivos de `main` y `practico-2` **después de conocer los JSON de Semgrep**. Por eso, la revisión no fue ciega ni constituye una prueba independiente de cuál método detecta más. Se analizaron rutas de entrada, consultas, plantillas, controladores, contraseñas y configuración de los cinco ejercicios. En esta etapa no se ejecutaron pruebas nuevas.
 
-| Caso observado por el LLM | Resultado frente a Semgrep |
-| --- | --- |
-| **Ejercicio 1:** en `main`, `query` entra en el texto SQL; en `practico-2` se pasa como parámetro y el orden se restringe a valores permitidos. | Semgrep omitió el problema de `main` y alertó erróneamente en `practico-2`. |
-| **Ejercicio 2, XSS:** `main` muestra la descripción guardada con `| safe`; `practico-2` quita ese filtro. | Semgrep omitió el XSS real y alertó sobre Jinja2 dentro del test, que configura escape automático. |
-| **Ejercicio 2, SQL adicional:** `app.py:31-35` inserta `query` directamente en `LIKE` y `sort_dir` al final de `ORDER BY`. `index()` obtiene ambos de la petición en las líneas 40 y 42. El archivo es igual en ambas ramas: **esta inyección SQL sigue presente en `practico-2`**. | Semgrep no emitió una alerta SQL para este archivo en ninguna rama: **falso negativo adicional**. La corrección del XSS no corrige esta consulta. |
-| **Ejercicio 3:** en `main` se guarda y sirve el archivo subido sin comprobar su formato; en `practico-2` se valida y reconstruye la imagen. | Semgrep no señaló la carga arbitraria de `main`. |
-| **Ejercicio 4:** en `main` la búsqueda invoca el evaluador SpEL; en `practico-2` usa texto literal, aunque conserva la clase peligrosa. | La alerta aparece en ambas ramas; es acertada para el recorrido de `main`, pero requiere contexto en `practico-2`. |
-| **Ejercicio 5:** `main` cifra contraseñas con AES/ECB y una clave fija; `practico-2` usa hashes Argon2id. | Semgrep detectó dos usos de ECB, pero omitió la clave fija y el almacenamiento reversible de contraseñas. |
-| **Configuración adicional:** `Ejercicio1/app.py:51-53` y `Ejercicio2/app.py:83-85` activan Flask `debug` por defecto y escuchan en `0.0.0.0`; los Dockerfile declaran el puerto 5000 y Compose lo publica sin desactivar el modo de depuración. Ocurre en ambas ramas. | Semgrep no lo alertó. Es una **configuración riesgosa si el servicio queda accesible fuera del entorno de práctica**; no se comprobó acceso externo. Flask [desaconseja usar su depurador en producción](https://flask.palletsprojects.com/en/stable/debugging/). |
+### Ejercicio 1 — Inyección SQL
 
-La revisión con LLM también confirmó las cinco alertas de Docker como advertencias de configuración y reconoció que las tres alertas CSRF usan una regla de Django sobre Thymeleaf. Estas observaciones se explican en la sección 4. Las conclusiones del LLM son **hipótesis justificadas con código**: pueden omitir rutas o interpretar mal un contexto y no sustituyen una prueba de ejecución.
+| Rama | Semgrep | Revisión del LLM |
+| --- | --- | --- |
+| `main` | No alertó sobre la consulta de `Ejercicio1/app.py`. | `buscar` llega a `query` y se inserta en `LIKE '%{query}%'`: **inyección SQL omitida por Semgrep**. |
+| `practico-2` | Alertó sobre `app.py:44`. | `query` se pasa a `db.execute()` como parámetro y el orden se limita a valores admitidos: **falso positivo para esta consulta**. |
 
-## 6. Comparación y conclusión
+En ambas ramas Semgrep también señaló que `Ejercicio1/Dockerfile` no declara `USER`. El LLM corroboró la configuración; la identidad efectiva del proceso no se comprobó ejecutando el contenedor.
 
-Los dos métodos aportaron información distinta. **Semgrep** aplicó 461 reglas de forma repetible y señaló AES/ECB, el evaluador SpEL y los Dockerfile sin `USER`. También produjo alertas que no corresponden al riesgo indicado en el contexto concreto: SQL en el Ejercicio 1 corregido, Jinja2 en un test y reglas CSRF de Django sobre Thymeleaf.
+### Ejercicio 2 — XSS e inyección SQL que permanece
 
-El **LLM** siguió entradas hasta su uso y detectó problemas que no figuraban en las alertas: SQL en el Ejercicio 1 de `main` y en el Ejercicio 2 de ambas ramas, el XSS de `main`, la carga arbitraria de `main`, la clave fija y el uso del depurador Flask por defecto. Además, distinguió la alerta de SpEL que permanece en `practico-2` del recorrido de búsqueda que ya no invoca ese método. Como el LLM conocía las alertas antes de revisar el código, esta comparación **no mide cuál método sería mejor en un examen independiente**.
+| Rama | Semgrep | Revisión del LLM |
+| --- | --- | --- |
+| `main` | Alertó sobre Jinja2 en `test_seguridad.py`, pero no sobre la plantilla ni la búsqueda SQL. | `templates/edit.html:86` muestra la descripción con `| safe`: **XSS omitido**. En `app.py:31-35`, `query` y `sort_dir` entran directamente en el SQL: **inyección SQL también omitida**. |
+| `practico-2` | Mantuvo la alerta en el test y no señaló la consulta SQL. | La plantilla ya no usa `| safe`, por lo que corrigió ese XSS. `app.py` es idéntico al de `main`: **la inyección SQL continúa en esta rama**. |
 
-**Conclusión:** pasar de 12 alertas en `main` a 11 en `practico-2` no mide por sí solo el riesgo. La segunda rama corrige las vulnerabilidades específicas analizadas en los cinco ejercicios, pero **mantiene la inyección SQL del Ejercicio 2 y la configuración de depuración de Flask**, además de las advertencias de Docker. El siguiente trabajo sobre el código sería parametrizar la consulta del Ejercicio 2, restringir la dirección de ordenamiento, desactivar `debug` fuera del desarrollo y revisar los permisos de los contenedores. La protección CSRF real no se evaluó mediante estas alertas.
+La alerta del test no identifica el XSS de la aplicación: el propio test configura escape automático. En ambas ramas Semgrep también alertó sobre `Dockerfile` sin `USER`. El LLM observó además que `app.py` inicia Flask con `debug` activado por defecto y escucha en `0.0.0.0`; el mismo comportamiento aparece en el Ejercicio 1. Es una configuración riesgosa si se expone fuera del entorno de práctica, sin prueba de acceso externo. [Flask desaconseja usar su depurador en producción](https://flask.palletsprojects.com/en/stable/debugging/).
+
+### Ejercicio 3 — Carga de archivos
+
+| Rama | Semgrep | Revisión del LLM |
+| --- | --- | --- |
+| `main` | No alertó sobre `PeliculaController.uploadFile`. | Guarda el archivo recibido con su nombre original sin validar que sea una imagen: **carga arbitraria omitida por Semgrep**. |
+| `practico-2` | Tampoco alertó sobre la carga. | El controlador valida formato, contenido, tamaño y dimensiones, reconstruye la imagen y le asigna un nombre nuevo: **se mitigó la causa observada en `main`**. |
+
+En ambas ramas Semgrep señaló `Dockerfile` sin `USER` y aplicó al formulario Thymeleaf una regla CSRF de Django. El LLM identificó la incompatibilidad de esa regla, sin concluir que exista o falte protección CSRF real.
+
+### Ejercicio 4 — Expresiones SpEL
+
+| Rama | Semgrep | Revisión del LLM |
+| --- | --- | --- |
+| `main` | Alertó sobre `SpelEvaluator.java:14`. | `FuncionController.search` envía `buscar` al evaluador: **alerta válida para la búsqueda**. |
+| `practico-2` | Conservó la misma alerta. | La búsqueda ya usa el texto directamente; **la alerta no demuestra que ese flujo siga siendo vulnerable**. La clase que evalúa expresiones continúa en el código y sería riesgosa si otro flujo le enviara datos no confiables. |
+
+La alerta de `Dockerfile` sin `USER` aparece en las dos ramas. La diferencia principal es que la corrección cambió la llamada al evaluador, algo que no se refleja en el número de alertas SpEL.
+
+### Ejercicio 5 — Contraseñas
+
+| Rama | Semgrep | Revisión del LLM |
+| --- | --- | --- |
+| `main` | Emitió dos alertas por AES/ECB en `EncryptionService.java:50` y `:64`. | **Alertas válidas** para dos usos del mismo modo. `AuthController` almacena contraseñas mediante cifrado reversible y el servicio contiene una clave fija: **problemas que las alertas no describen**. |
+| `practico-2` | Desaparecieron ambas alertas AES/ECB. | El servicio crea hashes Argon2id y el controlador verifica contraseñas sin descifrarlas: **la causa de las alertas AES/ECB ya no está**. |
+
+En ambas ramas persiste la alerta de `Dockerfile` sin `USER` y Semgrep señala dos formularios Thymeleaf por ausencia de la etiqueta CSRF de Django. Estas últimas son falsos positivos de esa regla, no una evaluación de la protección CSRF de Spring.
+
+## 6. Conclusión
+
+La comparación por ejercicio muestra por qué **12 alertas en `main` y 11 en `practico-2` no equivalen a una diferencia de una sola vulnerabilidad**. Semgrep detectó AES/ECB, el evaluador SpEL y la configuración de los Dockerfile; también marcó casos que, al revisar su contexto, no representan la vulnerabilidad indicada. El LLM permitió seguir entradas hasta su uso y reconocer omisiones, especialmente el SQL del Ejercicio 2, que continúa en ambas ramas.
+
+La rama `practico-2` corrigió las causas específicas del SQL del Ejercicio 1, el XSS del Ejercicio 2, la carga de archivos del Ejercicio 3, el recorrido SpEL del Ejercicio 4 y el cifrado reversible del Ejercicio 5. **Esto no significa que todos los ejercicios estén libres de riesgos:** permanecen el SQL del Ejercicio 2 y otras configuraciones señaladas. La revisión del LLM dependió de los archivos examinados y de las alertas conocidas; sus observaciones requieren verificación adicional cuando se quiera confirmar el comportamiento de la aplicación.
 
 ## Evidencias y reproducibilidad
 
