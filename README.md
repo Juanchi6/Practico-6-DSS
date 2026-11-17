@@ -36,7 +36,16 @@ Las diez alertas comunes se distribuyen así: cinco por Dockerfile sin `USER`, t
 
 ## 4. Análisis de los hallazgos
 
-Un **falso positivo** es una alerta que no corresponde a la vulnerabilidad indicada al revisar el contexto. Un **falso negativo** es una vulnerabilidad presente que la herramienta no detectó.
+Para clasificar una alerta se compara **cada problema concreto en cada rama** con lo que señaló Semgrep:
+
+| ¿Existe el problema analizado? | ¿Semgrep alerta sobre él? | Clasificación |
+| --- | --- | --- |
+| Sí | Sí | **Verdadero positivo**: alerta acertada. |
+| No | Sí | **Falso positivo**: alerta que no corresponde a ese problema. |
+| Sí | No | **Falso negativo**: problema omitido por Semgrep. |
+| No | No | **Verdadero negativo**: ausencia de alerta esperable para ese problema. |
+
+Una rama puede tener distintas clasificaciones para **problemas distintos**. Por ejemplo, corregir un XSS no corrige automáticamente una inyección SQL en otro archivo. «Verdadero negativo» se refiere solo al problema revisado, no a la seguridad de toda la aplicación.
 
 ### Ejercicio 1 — Inyección SQL
 
@@ -54,18 +63,20 @@ Para clasificar ambos casos se siguió el recorrido de `query` hasta `db.execute
 | Rama | Evidencia | Resultado de Semgrep | Clasificación |
 | --- | --- | --- | --- |
 | `main` | `Ejercicio2/app.py` guarda la descripción enviada por el formulario. En `templates/edit.html:86` se muestra con el filtro `safe`, que desactiva el escape HTML para ese valor. | No detectó el XSS en esa línea. | **Falso negativo:** el XSS existe, pero Semgrep no lo alertó. |
-| `practico-2` | La misma línea muestra `{{ pelicula['descripcion'] }}`, sin `safe`. | No alertó sobre esa línea; aquí la ausencia de alerta es esperable. | La causa de este XSS fue corregida. No hay falso negativo en esa línea. |
+| `practico-2` | La misma línea muestra `{{ pelicula['descripcion'] }}`, sin `safe`. | No alertó sobre esa línea; aquí la ausencia de alerta es esperable. | **Verdadero negativo para este XSS:** se quitó `safe` y es esperable que no aparezca una alerta sobre esa línea. |
 
 En **ambas ramas**, Semgrep sí avisó sobre uso directo de Jinja2 en `Ejercicio2/test_seguridad.py:15`. Esa línea pertenece al **test**, que configura `select_autoescape(["html"])`; la alerta no identifica el XSS de la aplicación. La clasificamos como **falso positivo para el riesgo que sugiere en ese archivo**. El test carga la plantilla real y está diseñado para fallar ante el filtro `safe` de `main` y pasar con el escape de `practico-2`; aquí se describe el criterio escrito en el test, sin atribuirle una ejecución nueva.
 
 La causa comprobable del XSS es `| safe` en la plantilla de la aplicación. La advertencia de análisis parcial del JSON corresponde a `templates/index.html`, no a `edit.html`; por tanto, no hay evidencia suficiente para atribuirle esa omisión.
+
+**Otro problema en este ejercicio:** `Ejercicio2/app.py:31-35` inserta `query` y `sort_dir` en una consulta SQL sin parametrizarlos. El código vulnerable permanece en `main` y en `practico-2`, y Semgrep no alertó sobre él: **falso negativo en las dos ramas**. Por eso, la clasificación «verdadero negativo» de la fila anterior se limita al XSS corregido.
 
 ### Ejercicio 3 — Carga de archivos
 
 | Rama | Evidencia en `Ejercicio3/src/main/java/com/cinebuscador/controller/PeliculaController.java` | Resultado de Semgrep | Clasificación |
 | --- | --- | --- | --- |
 | `main` | `uploadFile` toma `getOriginalFilename()` y copia el contenido recibido a `uploadDir` sin validar tamaño, extensión ni formato. `serveFile` lo devuelve en línea con un tipo de contenido inferido del archivo. | No emitió alerta por esta carga de archivos. | **Falso negativo:** el servidor acepta y almacena archivos arbitrarios como afiches. |
-| `practico-2` | Rechaza archivos vacíos y mayores a 1 MiB, permite PNG/JPG/JPEG, verifica que el contenido coincida con el formato y limita dimensiones. Guarda una imagen reconstruida con nombre UUID. Al servirla, valida el nombre y el directorio, fija el tipo de imagen y agrega `nosniff`. | Tampoco emitió alerta por esta funcionalidad. | La causa identificada en `main` fue mitigada en el código. |
+| `practico-2` | Rechaza archivos vacíos y mayores a 1 MiB, permite PNG/JPG/JPEG, verifica que el contenido coincida con el formato y limita dimensiones. Guarda una imagen reconstruida con nombre UUID. Al servirla, valida el nombre y el directorio, fija el tipo de imagen y agrega `nosniff`. | Tampoco emitió alerta por esta funcionalidad. | **Verdadero negativo para la carga arbitraria analizada:** el código valida y reconstruye la imagen; la ausencia de esa alerta es esperable. |
 
 La diferencia se verifica siguiendo el archivo desde `POST /upload/{id}` hasta `GET /uploads/{filename}`. Una ausencia de alertas no demuestra que una funcionalidad sea segura: en `main` Semgrep omitió controles faltantes que sí se ven al revisar el flujo completo. Esta comparación se limita a la vulnerabilidad de carga arbitraria; no certifica todas las propiedades de seguridad de `practico-2`.
 
@@ -76,9 +87,9 @@ La alerta de Semgrep sobre el formulario de carga de archivos se analiza junto c
 | Rama | Recorrido del dato | Resultado de Semgrep | Clasificación |
 | --- | --- | --- | --- |
 | `main` | `FuncionController.search` pasa el parámetro de búsqueda `buscar` a `spelEval.evaluate(buscar)`. En `SpelEvaluator.java`, el método lo procesa con `parseExpression(expression)` y `getValue(standardContext)`. | Señaló `SpelEvaluator.java:14`. | **Verdadero positivo para el flujo de búsqueda:** la entrada del usuario llega al evaluador de expresiones. |
-| `practico-2` | El controlador usa `String spelResultado = buscar` y busca el texto literalmente. `SpelEvaluator` conserva el mismo código, pero este flujo ya no lo llama. | Conservó la misma alerta en `SpelEvaluator.java:14`. | **Alerta que requiere contexto:** el método señalado sigue siendo inseguro si se lo invoca con datos no confiables, pero no demuestra que el buscador corregido sea vulnerable. |
+| `practico-2` | El controlador usa `String spelResultado = buscar` y busca el texto literalmente. `SpelEvaluator` conserva el mismo código, pero este flujo ya no lo llama. | Conservó la misma alerta en `SpelEvaluator.java:14`. | **Alerta válida sobre el método (alcanzabilidad no confirmada):** el evaluador sigue aceptando expresiones dinámicas, pero la búsqueda corregida ya no lo invoca. |
 
-Aunque el evaluador construye un `SimpleEvaluationContext`, ejecuta la expresión con `StandardEvaluationContext`, al que además añade variables relacionadas con `System` y `Runtime`. La corrección cambió el **recorrido de la entrada**, no el archivo que Semgrep señala. Por eso se mantiene una alerta en ambas ramas aunque se haya eliminado la evaluación de expresiones desde el buscador. En este flujo, la alerta de `practico-2` es un **falso positivo si se interpreta como vulnerabilidad explotable desde la búsqueda**; el método riesgoso sigue presente y convendría eliminarlo si ya no se usa.
+Aunque el evaluador construye un `SimpleEvaluationContext`, ejecuta la expresión con `StandardEvaluationContext`, al que además añade variables relacionadas con `System` y `Runtime`. La corrección cambió el **recorrido de la entrada**, no el archivo que Semgrep señala. Por eso se mantiene una alerta en ambas ramas aunque se haya eliminado la evaluación de expresiones desde el buscador. En `practico-2`, Semgrep advierte correctamente que el método conserva el patrón peligroso. **No hay evidencia de que la búsqueda siga siendo vulnerable:** la alerta no demuestra que ese método sea alcanzable desde el buscador corregido. Conviene eliminarlo si ya no se usa.
 
 Los tests de integración del repositorio están diseñados para exigir que `1+1` se trate como texto y que una búsqueda de `Inception` responda correctamente. Esta sección se apoya en el código y en esos criterios, sin atribuirles una ejecución nueva; la alerta por sí sola no prueba que se pueda alcanzar el evaluador desde la rama corregida.
 
@@ -87,7 +98,7 @@ Los tests de integración del repositorio están diseñados para exigir que `1+1
 | Rama | Evidencia en el código | Resultado de Semgrep | Clasificación |
 | --- | --- | --- | --- |
 | `main` | `AuthController` guarda la contraseña con `EncryptionService.encrypt()` y la recupera con `decrypt()` para comparar durante el inicio de sesión. El servicio usa `AES/ECB/PKCS5Padding` y define una clave fija en el código fuente. | Emitió **dos alertas** sobre AES/ECB en `EncryptionService.java:50` y `:64`, correspondientes a cifrar y descifrar. No alertó sobre la clave fija ni sobre el almacenamiento reversible de contraseñas. | **Verdaderos positivos** para el modo ECB; **falsos negativos** para la clave embebida y el diseño de contraseñas reversibles. |
-| `practico-2` | `EncryptionService` genera hashes `Argon2id` con sal y verifica contraseñas mediante `matches()`. El controlador ya no descifra las contraseñas. | Desaparecieron las dos alertas AES/ECB. | El cambio elimina el cifrado reversible y la clave fija de este servicio; no hay alerta ECB porque ya no se usa AES/ECB allí. |
+| `practico-2` | `EncryptionService` genera hashes `Argon2id` con sal y verifica contraseñas mediante `matches()`. El controlador ya no descifra las contraseñas. | Desaparecieron las dos alertas AES/ECB. | **Verdadero negativo para AES/ECB:** ya no se usa ese modo ni cifrado reversible en este servicio, y tampoco aparece esa alerta. |
 
 Las dos alertas de `main` corresponden a **dos usos del mismo modo inseguro**, no a dos causas independientes. Además, una contraseña almacenada con cifrado reversible puede recuperarse si se obtiene la clave; con hashes para contraseñas, la verificación compara la contraseña ingresada con el hash sin descifrarla. Semgrep detectó el patrón `AES/ECB`, pero el análisis del servicio y de `AuthController` permitió identificar los problemas adicionales que omitió.
 
@@ -99,8 +110,8 @@ Semgrep señaló **un Dockerfile por ejercicio** en `main` y en `practico-2` por
 
 | Archivos afectados | Qué indica la alerta | Clasificación |
 | --- | --- | --- |
-| `Ejercicio1/Dockerfile` y `Ejercicio2/Dockerfile` | La imagen final ejecuta Flask sin declarar un usuario en el Dockerfile ni en Compose. | **Alerta válida de configuración**, presente en las dos ramas. |
-| `Ejercicio3/Dockerfile`, `Ejercicio4/Dockerfile` y `Ejercicio5/Dockerfile` | La imagen final ejecuta Java sin declarar un usuario en el Dockerfile ni en Compose. | **Alerta válida de configuración**, presente en las dos ramas. |
+| `Ejercicio1/Dockerfile` y `Ejercicio2/Dockerfile` | La imagen final ejecuta Flask sin declarar un usuario en el Dockerfile ni en Compose. | **Verdadero positivo de configuración:** falta declarar `USER` en ambas ramas. |
+| `Ejercicio3/Dockerfile`, `Ejercicio4/Dockerfile` y `Ejercicio5/Dockerfile` | La imagen final ejecuta Java sin declarar un usuario en el Dockerfile ni en Compose. | **Verdadero positivo de configuración:** falta declarar `USER` en ambas ramas. |
 
 La alerta advierte que no se asigna explícitamente una identidad con menos privilegios al proceso de la aplicación. Los archivos analizados justifican la advertencia, pero **no incluyen una comprobación del usuario efectivo dentro del contenedor**, que haría falta para afirmar con certeza qué identidad tiene en ejecución.
 
@@ -125,10 +136,10 @@ Un **LLM** es un modelo de lenguaje capaz de examinar y explicar código. Este a
 | Ejercicio | Semgrep | Revisión del LLM y diferencia |
 | --- | --- | --- |
 | **1 — SQL** | Omitió la consulta vulnerable en `main` y alertó sobre `app.py:44` en `practico-2`. | En `main` la búsqueda inserta la entrada en SQL; en `practico-2` la pasa como parámetro y restringe el orden. La alerta de la rama corregida es un **falso positivo**. |
-| **2 — XSS y SQL** | Alertó sobre Jinja2 en un test de ambas ramas, sin detectar el XSS ni la consulta SQL de la aplicación. | En `main` la plantilla usa el filtro `safe`, que se quitó en `practico-2`. La consulta vulnerable de `app.py:31-35` **permanece en las dos ramas**. La alerta del test no identifica el XSS real. |
-| **3 — Archivos** | No alertó sobre la carga de archivos en ninguna rama. | `main` guarda archivos sin validar que sean imágenes; `practico-2` comprueba el contenido y guarda una imagen reconstruida. Semgrep **omitió el problema de `main`**. |
-| **4 — SpEL** | Mantuvo la alerta sobre `SpelEvaluator.java:14` en ambas ramas. | En `main` el buscador llama al evaluador; en `practico-2` trata la búsqueda como texto. La clase alertada sigue en el código, pero ese flujo ya no la invoca. |
-| **5 — Contraseñas** | Detectó dos usos de AES/ECB en `main`; desaparecieron en `practico-2`. | En `main` las contraseñas son reversibles y hay una clave fija que Semgrep no señaló; `practico-2` usa hashes Argon2id y verifica sin descifrar. |
+| **2 — XSS y SQL** | Alertó sobre Jinja2 en un test de ambas ramas, sin detectar el XSS ni la consulta SQL de la aplicación. | El XSS de `main` es un **falso negativo**; al quitar `safe` en `practico-2`, su ausencia de alerta es un **verdadero negativo para ese XSS**. El SQL de `app.py:31-35` sigue vulnerable y omitido en ambas ramas (**falso negativo**). La alerta del test es un **falso positivo** para el riesgo que sugiere allí. |
+| **3 — Archivos** | No alertó sobre la carga de archivos en ninguna rama. | Semgrep omitió la carga arbitraria de `main` (**falso negativo**). `practico-2` comprueba el contenido y reconstruye la imagen; la falta de alerta para ese problema es un **verdadero negativo**. |
+| **4 — SpEL** | Mantuvo la alerta sobre `SpelEvaluator.java:14` en ambas ramas. | En `main`, el buscador llama al evaluador (**verdadero positivo del flujo**). En `practico-2` trata la búsqueda como texto; la alerta sigue siendo válida sobre el método que quedó en el código, aunque no demuestra una vulnerabilidad del buscador corregido. |
+| **5 — Contraseñas** | Detectó dos usos de AES/ECB en `main`; desaparecieron en `practico-2`. | En `main`, los avisos AES/ECB son **verdaderos positivos** y las omisiones de la clave fija y las contraseñas reversibles son **falsos negativos**. En `practico-2` se usa Argon2id: la ausencia de alertas ECB es un **verdadero negativo para ese modo**. |
 
 Además, Semgrep señaló **cinco Dockerfile sin `USER`** y aplicó **tres alertas CSRF de Django a plantillas Thymeleaf** en ambas ramas. El LLM confirmó la configuración de Docker y clasificó las alertas de Django como falsos positivos de esa regla; esto no determina si existe protección CSRF real. La sección 4 explica ambos casos.
 
