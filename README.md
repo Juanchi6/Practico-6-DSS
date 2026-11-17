@@ -55,7 +55,7 @@ Para clasificar ambos casos se siguió el recorrido de `query` hasta `db.execute
 
 | Rama | Evidencia | Resultado de Semgrep | Clasificación |
 | --- | --- | --- | --- |
-| `main` | `Ejercicio2/app.py` guarda la descripción enviada por el formulario. En `templates/edit.html:86` se muestra con `{{ pelicula['descripcion'] | safe }}`, que desactiva el escape HTML para ese valor. | No detectó el XSS en esa línea. | **Falso negativo:** el XSS existe, pero Semgrep no lo alertó. |
+| `main` | `Ejercicio2/app.py` guarda la descripción enviada por el formulario. En `templates/edit.html:86` se muestra con el filtro `safe`, que desactiva el escape HTML para ese valor. | No detectó el XSS en esa línea. | **Falso negativo:** el XSS existe, pero Semgrep no lo alertó. |
 | `practico-2` | La misma línea muestra `{{ pelicula['descripcion'] }}`, sin `safe`. | No alertó sobre esa línea; aquí la ausencia de alerta es esperable. | La causa de este XSS fue corregida. No hay falso negativo en esa línea. |
 
 En **ambas ramas**, Semgrep sí avisó sobre uso directo de Jinja2 en `Ejercicio2/test_seguridad.py:15`. Esa línea pertenece al **test**, que configura `select_autoescape(["html"])`; la alerta no identifica el XSS de la aplicación. La clasificamos como **falso positivo para el riesgo que sugiere en ese archivo**. El test usa la plantilla real y comprueba el comportamiento vulnerable en `main` y el escapado en `practico-2`.
@@ -137,8 +137,8 @@ En ambas ramas Semgrep también señaló que `Ejercicio1/Dockerfile` no declara 
 
 | Rama | Semgrep | Revisión del LLM |
 | --- | --- | --- |
-| `main` | Alertó sobre Jinja2 en `test_seguridad.py`, pero no sobre la plantilla ni la búsqueda SQL. | `templates/edit.html:86` muestra la descripción con `| safe`: **XSS omitido**. En `app.py:31-35`, `query` y `sort_dir` entran directamente en el SQL: **inyección SQL también omitida**. |
-| `practico-2` | Mantuvo la alerta en el test y no señaló la consulta SQL. | La plantilla ya no usa `| safe`, por lo que corrigió ese XSS. `app.py` es idéntico al de `main`: **la inyección SQL continúa en esta rama**. |
+| `main` | Alertó sobre Jinja2 en `test_seguridad.py`, pero no sobre la plantilla ni la búsqueda SQL. | `templates/edit.html:86` muestra la descripción con el filtro `safe`: **XSS omitido**. En `app.py:31-35`, `query` y `sort_dir` entran directamente en el SQL: **inyección SQL también omitida**. |
+| `practico-2` | Mantuvo la alerta en el test y no señaló la consulta SQL. | La plantilla ya no usa el filtro `safe`, por lo que corrigió ese XSS. `app.py` es idéntico al de `main`: **la inyección SQL continúa en esta rama**. |
 
 La alerta del test no identifica el XSS de la aplicación: el propio test configura escape automático. En ambas ramas Semgrep también alertó sobre `Dockerfile` sin `USER`. El LLM observó además que `app.py` inicia Flask con `debug` activado por defecto y escucha en `0.0.0.0`; el mismo comportamiento aparece en el Ejercicio 1. Es una configuración riesgosa si se expone fuera del entorno de práctica, sin prueba de acceso externo. [Flask desaconseja usar su depurador en producción](https://flask.palletsprojects.com/en/stable/debugging/).
 
