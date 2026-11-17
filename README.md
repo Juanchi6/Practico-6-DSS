@@ -24,7 +24,7 @@ Ambos escaneos finalizaron correctamente y se limitaron a archivos seguidos por 
 
 ## 2. Herramienta: funcionamiento y limitaciones
 
-Se usó **Semgrep Community Edition (CE) 1.185.0**. Examina el código sin ejecutar las aplicaciones y aplica reglas para localizar patrones y flujos de datos potencialmente inseguros. Con `--config auto` se cargaron 461 reglas comunitarias adecuadas al proyecto.
+Se usó **Semgrep Community Edition (CE) 1.185.0**. Examina el código sin ejecutar las aplicaciones y aplica reglas para localizar patrones y flujos de datos potencialmente inseguros. Con `--config auto`, la configuración automática que Semgrep CE recomienda para seleccionar reglas según el proyecto, se ejecutaron 461 reglas en cada rama. No se añadieron reglas propias.
 
 La edición Community permite ejecutar reglas locales y comunitarias. Frente a Semgrep Code comercial, no incluye reglas Pro ni análisis avanzado entre archivos y funciones; el escaneo OSS tampoco activó Semgrep Supply Chain. Por eso, una vulnerabilidad puede existir aunque no aparezca una alerta.
 
@@ -58,7 +58,7 @@ Para clasificar ambos casos se siguió el recorrido de `query` hasta `db.execute
 | `main` | `Ejercicio2/app.py` guarda la descripción enviada por el formulario. En `templates/edit.html:86` se muestra con el filtro `safe`, que desactiva el escape HTML para ese valor. | No detectó el XSS en esa línea. | **Falso negativo:** el XSS existe, pero Semgrep no lo alertó. |
 | `practico-2` | La misma línea muestra `{{ pelicula['descripcion'] }}`, sin `safe`. | No alertó sobre esa línea; aquí la ausencia de alerta es esperable. | La causa de este XSS fue corregida. No hay falso negativo en esa línea. |
 
-En **ambas ramas**, Semgrep sí avisó sobre uso directo de Jinja2 en `Ejercicio2/test_seguridad.py:15`. Esa línea pertenece al **test**, que configura `select_autoescape(["html"])`; la alerta no identifica el XSS de la aplicación. La clasificamos como **falso positivo para el riesgo que sugiere en ese archivo**. El test usa la plantilla real y comprueba el comportamiento vulnerable en `main` y el escapado en `practico-2`.
+En **ambas ramas**, Semgrep sí avisó sobre uso directo de Jinja2 en `Ejercicio2/test_seguridad.py:15`. Esa línea pertenece al **test**, que configura `select_autoescape(["html"])`; la alerta no identifica el XSS de la aplicación. La clasificamos como **falso positivo para el riesgo que sugiere en ese archivo**. El test carga la plantilla real y está diseñado para fallar ante el filtro `safe` de `main` y pasar con el escape de `practico-2`; aquí se describe el criterio escrito en el test, sin atribuirle una ejecución nueva.
 
 La causa comprobable del XSS es `| safe` en la plantilla de la aplicación. La advertencia de análisis parcial del JSON corresponde a `templates/index.html`, no a `edit.html`; por tanto, no hay evidencia suficiente para atribuirle esa omisión.
 
@@ -82,7 +82,7 @@ La alerta de Semgrep sobre el formulario de carga de archivos se analiza junto c
 
 Aunque el evaluador construye un `SimpleEvaluationContext`, ejecuta la expresión con `StandardEvaluationContext`, al que además añade variables relacionadas con `System` y `Runtime`. La corrección cambió el **recorrido de la entrada**, no el archivo que Semgrep señala. Por eso se mantiene una alerta en ambas ramas aunque se haya eliminado la evaluación de expresiones desde el buscador. En este flujo, la alerta de `practico-2` es un **falso positivo si se interpreta como vulnerabilidad explotable desde la búsqueda**; el método riesgoso sigue presente y convendría eliminarlo si ya no se usa.
 
-Los tests de integración del repositorio comprueban que `1+1` se trate como texto y que una búsqueda de `Inception` devuelva una respuesta correcta. El informe se apoya aquí en el código y en esos criterios de prueba; la alerta por sí sola no prueba que se pueda alcanzar el evaluador desde la rama corregida.
+Los tests de integración del repositorio están diseñados para exigir que `1+1` se trate como texto y que una búsqueda de `Inception` responda correctamente. Esta sección se apoya en el código y en esos criterios, sin atribuirles una ejecución nueva; la alerta por sí sola no prueba que se pueda alcanzar el evaluador desde la rama corregida.
 
 ### Ejercicio 5 — Protección de contraseñas
 
