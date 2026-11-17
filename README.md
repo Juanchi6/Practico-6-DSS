@@ -120,52 +120,19 @@ CSRF es un ataque que intenta hacer que el navegador de una persona envíe una p
 
 ## 5. Revisión del código con LLM y comparación por ejercicio
 
-Un **LLM** es un modelo de lenguaje capaz de examinar y explicar código. Este asistente revisó archivos de `main` y `practico-2` **después de conocer los JSON de Semgrep**. Por eso, la revisión no fue ciega ni constituye una prueba independiente de cuál método detecta más. Se analizaron rutas de entrada, consultas, plantillas, controladores, contraseñas y configuración de los cinco ejercicios. En esta etapa no se ejecutaron pruebas nuevas.
+Un **LLM** es un modelo de lenguaje capaz de examinar y explicar código. Este asistente revisó los archivos relevantes de ambas ramas **después de conocer los JSON de Semgrep**; por eso no se trata de una comparación ciega. En este paso no se ejecutaron pruebas nuevas. La evidencia y la clasificación detallada de cada caso están en la sección 4.
 
-### Ejercicio 1 — Inyección SQL
-
-| Rama | Semgrep | Revisión del LLM |
+| Ejercicio | Semgrep | Revisión del LLM y diferencia |
 | --- | --- | --- |
-| `main` | No alertó sobre la consulta de `Ejercicio1/app.py`. | `buscar` llega a `query` y se inserta en `LIKE '%{query}%'`: **inyección SQL omitida por Semgrep**. |
-| `practico-2` | Alertó sobre `app.py:44`. | `query` se pasa a `db.execute()` como parámetro y el orden se limita a valores admitidos: **falso positivo para esta consulta**. |
+| **1 — SQL** | Omitió la consulta vulnerable en `main` y alertó sobre `app.py:44` en `practico-2`. | En `main` la búsqueda inserta la entrada en SQL; en `practico-2` la pasa como parámetro y restringe el orden. La alerta de la rama corregida es un **falso positivo**. |
+| **2 — XSS y SQL** | Alertó sobre Jinja2 en un test de ambas ramas, sin detectar el XSS ni la consulta SQL de la aplicación. | En `main` la plantilla usa el filtro `safe`, que se quitó en `practico-2`. La consulta vulnerable de `app.py:31-35` **permanece en las dos ramas**. La alerta del test no identifica el XSS real. |
+| **3 — Archivos** | No alertó sobre la carga de archivos en ninguna rama. | `main` guarda archivos sin validar que sean imágenes; `practico-2` comprueba el contenido y guarda una imagen reconstruida. Semgrep **omitió el problema de `main`**. |
+| **4 — SpEL** | Mantuvo la alerta sobre `SpelEvaluator.java:14` en ambas ramas. | En `main` el buscador llama al evaluador; en `practico-2` trata la búsqueda como texto. La clase alertada sigue en el código, pero ese flujo ya no la invoca. |
+| **5 — Contraseñas** | Detectó dos usos de AES/ECB en `main`; desaparecieron en `practico-2`. | En `main` las contraseñas son reversibles y hay una clave fija que Semgrep no señaló; `practico-2` usa hashes Argon2id y verifica sin descifrar. |
 
-En ambas ramas Semgrep también señaló que `Ejercicio1/Dockerfile` no declara `USER`. El LLM corroboró la configuración; la identidad efectiva del proceso no se comprobó ejecutando el contenedor.
+Además, Semgrep señaló **cinco Dockerfile sin `USER`** y aplicó **tres alertas CSRF de Django a plantillas Thymeleaf** en ambas ramas. El LLM confirmó la configuración de Docker y clasificó las alertas de Django como falsos positivos de esa regla; esto no determina si existe protección CSRF real. La sección 4 explica ambos casos.
 
-### Ejercicio 2 — XSS e inyección SQL que permanece
-
-| Rama | Semgrep | Revisión del LLM |
-| --- | --- | --- |
-| `main` | Alertó sobre Jinja2 en `test_seguridad.py`, pero no sobre la plantilla ni la búsqueda SQL. | `templates/edit.html:86` muestra la descripción con el filtro `safe`: **XSS omitido**. En `app.py:31-35`, `query` y `sort_dir` entran directamente en el SQL: **inyección SQL también omitida**. |
-| `practico-2` | Mantuvo la alerta en el test y no señaló la consulta SQL. | La plantilla ya no usa el filtro `safe`, por lo que corrigió ese XSS. `app.py` es idéntico al de `main`: **la inyección SQL continúa en esta rama**. |
-
-La alerta del test no identifica el XSS de la aplicación: el propio test configura escape automático. En ambas ramas Semgrep también alertó sobre `Dockerfile` sin `USER`. El LLM observó además que `app.py` inicia Flask con `debug` activado por defecto y escucha en `0.0.0.0`; el mismo comportamiento aparece en el Ejercicio 1. Es una configuración riesgosa si se expone fuera del entorno de práctica, sin prueba de acceso externo. [Flask desaconseja usar su depurador en producción](https://flask.palletsprojects.com/en/stable/debugging/).
-
-### Ejercicio 3 — Carga de archivos
-
-| Rama | Semgrep | Revisión del LLM |
-| --- | --- | --- |
-| `main` | No alertó sobre `PeliculaController.uploadFile`. | Guarda el archivo recibido con su nombre original sin validar que sea una imagen: **carga arbitraria omitida por Semgrep**. |
-| `practico-2` | Tampoco alertó sobre la carga. | El controlador valida formato, contenido, tamaño y dimensiones, reconstruye la imagen y le asigna un nombre nuevo: **se mitigó la causa observada en `main`**. |
-
-En ambas ramas Semgrep señaló `Dockerfile` sin `USER` y aplicó al formulario Thymeleaf una regla CSRF de Django. El LLM identificó la incompatibilidad de esa regla, sin concluir que exista o falte protección CSRF real.
-
-### Ejercicio 4 — Expresiones SpEL
-
-| Rama | Semgrep | Revisión del LLM |
-| --- | --- | --- |
-| `main` | Alertó sobre `SpelEvaluator.java:14`. | `FuncionController.search` envía `buscar` al evaluador: **alerta válida para la búsqueda**. |
-| `practico-2` | Conservó la misma alerta. | La búsqueda ya usa el texto directamente; **la alerta no demuestra que ese flujo siga siendo vulnerable**. La clase que evalúa expresiones continúa en el código y sería riesgosa si otro flujo le enviara datos no confiables. |
-
-La alerta de `Dockerfile` sin `USER` aparece en las dos ramas. La diferencia principal es que la corrección cambió la llamada al evaluador, algo que no se refleja en el número de alertas SpEL.
-
-### Ejercicio 5 — Contraseñas
-
-| Rama | Semgrep | Revisión del LLM |
-| --- | --- | --- |
-| `main` | Emitió dos alertas por AES/ECB en `EncryptionService.java:50` y `:64`. | **Alertas válidas** para dos usos del mismo modo. `AuthController` almacena contraseñas mediante cifrado reversible y el servicio contiene una clave fija: **problemas que las alertas no describen**. |
-| `practico-2` | Desaparecieron ambas alertas AES/ECB. | El servicio crea hashes Argon2id y el controlador verifica contraseñas sin descifrarlas: **la causa de las alertas AES/ECB ya no está**. |
-
-En ambas ramas persiste la alerta de `Dockerfile` sin `USER` y Semgrep señala dos formularios Thymeleaf por ausencia de la etiqueta CSRF de Django. Estas últimas son falsos positivos de esa regla, no una evaluación de la protección CSRF de Spring.
+En los Ejercicios 1 y 2, el LLM también observó que Flask inicia con `debug` activado por defecto y escucha en `0.0.0.0`; Semgrep no lo señaló. Puede ser riesgoso si el servicio se expone fuera del entorno de práctica, pero no se comprobó acceso externo. [Flask desaconseja usar su depurador en producción](https://flask.palletsprojects.com/en/stable/debugging/).
 
 ## 6. Conclusión
 
