@@ -20,7 +20,6 @@ Se ejecutó el mismo comando desde la raíz del repositorio en cada rama. Los ar
 
 Ambos escaneos finalizaron correctamente y se limitaron a archivos seguidos por Git. En los dos JSON se registró una advertencia de análisis parcial de una plantilla HTML; se tendrá en cuenta al evaluar posibles omisiones. Los términos `ERROR`, `WARNING` y `blocking` son etiquetas de la herramienta, no una confirmación automática de que cada hallazgo sea una vulnerabilidad explotable.
 
-
 ## 2. Herramienta: funcionamiento y limitaciones
 
 Se usó **Semgrep Community Edition (CE) 1.185.0**. Examina el código sin ejecutar las aplicaciones y aplica reglas para localizar patrones y flujos de datos potencialmente inseguros. Se usó `--config auto`, la opción que Semgrep CE recomienda para elegir automáticamente reglas del registro según el proyecto. En estas ejecuciones seleccionó 461 reglas por rama; no se añadieron reglas propias. Como la selección proviene del registro, un escaneo futuro podría elegir otras reglas.
