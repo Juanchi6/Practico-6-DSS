@@ -24,7 +24,7 @@ Ambos escaneos finalizaron correctamente y se limitaron a archivos seguidos por 
 
 ## 2. Herramienta: funcionamiento y limitaciones
 
-Se usó **Semgrep Community Edition (CE) 1.185.0**. Examina el código sin ejecutar las aplicaciones y aplica reglas para localizar patrones y flujos de datos potencialmente inseguros. Con `--config auto`, la configuración automática que Semgrep CE recomienda para seleccionar reglas según el proyecto, se ejecutaron 461 reglas en cada rama. No se añadieron reglas propias.
+Se usó **Semgrep Community Edition (CE) 1.185.0**. Examina el código sin ejecutar las aplicaciones y aplica reglas para localizar patrones y flujos de datos potencialmente inseguros. Se usó `--config auto`, la opción que Semgrep CE recomienda para elegir automáticamente reglas del registro según el proyecto. En estas ejecuciones seleccionó 461 reglas por rama; no se añadieron reglas propias. Como la selección proviene del registro, un escaneo futuro podría elegir otras reglas.
 
 La edición Community permite ejecutar reglas locales y comunitarias. Frente a Semgrep Code comercial, no incluye reglas Pro ni análisis avanzado entre archivos y funciones; el escaneo OSS tampoco activó Semgrep Supply Chain. Por eso, una vulnerabilidad puede existir aunque no aparezca una alerta.
 
