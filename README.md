@@ -20,7 +20,6 @@ Se ejecutó el mismo comando desde la raíz del repositorio en cada rama. Los ar
 
 Ambos escaneos finalizaron correctamente y se limitaron a archivos seguidos por Git. En los dos JSON se registró una advertencia de análisis parcial de una plantilla HTML; se tendrá en cuenta al evaluar posibles omisiones. Los términos `ERROR`, `WARNING` y `blocking` son etiquetas de la herramienta, no una confirmación automática de que cada hallazgo sea una vulnerabilidad explotable.
 
-**Referencias de las ramas consultadas después de los escaneos:** [`main` — `9299e0bc9380fc5295da1f605670fcc0703301b5`](https://github.com/Juanchi6/Practico-2-DSS/commit/9299e0bc9380fc5295da1f605670fcc0703301b5) y [`practico-2` — `132e676cf4be0dc7c8102975fe3faf5d9949fccf`](https://github.com/Juanchi6/Practico-2-DSS/commit/132e676cf4be0dc7c8102975fe3faf5d9949fccf). Los JSON de Semgrep no registran el SHA de Git: estas referencias permiten localizar las ramas revisadas, pero los JSON por sí solos no prueban el commit exacto de cada ejecución.
 
 ## 2. Herramienta: funcionamiento y limitaciones
 
