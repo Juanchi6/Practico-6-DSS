@@ -20,7 +20,7 @@ Se ejecutó el mismo comando desde la raíz del repositorio en cada rama. Los ar
 
 Ambos escaneos finalizaron correctamente y se limitaron a archivos seguidos por Git. En los dos JSON se registró una advertencia de análisis parcial de una plantilla HTML; se tendrá en cuenta al evaluar posibles omisiones. Los términos `ERROR`, `WARNING` y `blocking` son etiquetas de la herramienta, no una confirmación automática de que cada hallazgo sea una vulnerabilidad explotable.
 
-**Identificadores de commit analizados:** pendientes de registrar para fijar exactamente la versión de cada rama.
+**Referencias de las ramas consultadas después de los escaneos:** [`main` — `9299e0bc9380fc5295da1f605670fcc0703301b5`](https://github.com/Juanchi6/Practico-2-DSS/commit/9299e0bc9380fc5295da1f605670fcc0703301b5) y [`practico-2` — `132e676cf4be0dc7c8102975fe3faf5d9949fccf`](https://github.com/Juanchi6/Practico-2-DSS/commit/132e676cf4be0dc7c8102975fe3faf5d9949fccf). Los JSON de Semgrep no registran el SHA de Git: estas referencias permiten localizar las ramas revisadas, pero los JSON por sí solos no prueban el commit exacto de cada ejecución.
 
 ## 2. Herramienta: funcionamiento y limitaciones
 
@@ -177,4 +177,21 @@ La rama `practico-2` corrigió las causas específicas del SQL del Ejercicio 1, 
 
 ## Evidencias y reproducibilidad
 
-Los resúmenes de terminal y los archivos `semgrep-main.json` y `semgrep-practico-2.json` respaldan las cifras. La clasificación de cada caso se basa en las alertas de esos JSON y en el recorrido concreto de los datos en el código de ambas ramas.
+Los resúmenes de terminal y los archivos `semgrep-main.json` y `semgrep-practico-2.json` respaldan las cifras de la sección 1. Los JSON se generaron fuera del repositorio; la siguiente tabla **transcribe sus 12 y 11 alertas** para que el informe se pueda leer sin abrir esos archivos. Las rutas son relativas a la carpeta de cada ejercicio. Un `0` significa que no hubo alerta de esa regla en esa rama, no que el código sea seguro.
+
+| Ejercicio | Regla (nombre abreviado) | Archivo y línea | `main` | `practico-2` |
+| --- | --- | --- | ---: | ---: |
+| 1 | `missing-user` | `Dockerfile:12` | 1 | 1 |
+| 1 | `sqlalchemy-execute-raw-query` | `app.py:44` | 0 | 1 |
+| 2 | `missing-user` | `Dockerfile:12` | 1 | 1 |
+| 2 | `direct-use-of-jinja2` | `test_seguridad.py:15` | 1 | 1 |
+| 3 | `missing-user-entrypoint` | `Dockerfile:16` | 1 | 1 |
+| 3 | `django-no-csrf-token` | `src/main/resources/templates/upload.html:39` | 1 | 1 |
+| 4 | `missing-user-entrypoint` | `Dockerfile:12` | 1 | 1 |
+| 4 | `spel-injection` | `src/main/java/com/cinebuscador/config/SpelEvaluator.java:14` | 1 | 1 |
+| 5 | `missing-user-entrypoint` | `Dockerfile:12` | 1 | 1 |
+| 5 | `use-of-aes-ecb` | `src/main/java/com/cinebuscador/config/EncryptionService.java:50, 64` | 2 | 0 |
+| 5 | `django-no-csrf-token` | `src/main/resources/templates/index.html:45, 56` | 2 | 2 |
+| **Total** | | | **12** | **11** |
+
+En los dos JSON aparece una advertencia de análisis parcial de `Ejercicio2/templates/index.html`; por ello, las alertas no deben interpretarse como un examen completo de cada línea. La clasificación de falsos positivos y negativos se fundamenta en el código y se desarrolla por ejercicio en las secciones 4 y 5.
